@@ -20,7 +20,10 @@ cmd_store() {
     local passfile="$PREFIX/$path.gpg"
 
     cd $OLDPWD # fix for relative paths
-    local file_abs_path="$OLDPWD/$file"
+    case "$file" in
+        /*) local file_abs_path="$file";;
+        *) local file_abs_path="$OLDPWD/$file";;
+    esac
 
     check_sneaky_paths "$1"
     set_git "$passfile"
@@ -42,7 +45,7 @@ cmd_store() {
 
     set_gpg_recipients "$(dirname "$path")"
 
-    base64 $file_abs_path | $GPG -e "${GPG_RECIPIENT_ARGS[@]}" -o "$passfile" "${GPG_OPTS[@]}" 
+    base64 -i $file_abs_path | $GPG -e "${GPG_RECIPIENT_ARGS[@]}" -o "$passfile" "${GPG_OPTS[@]}" 
 
     git_add_file $passfile "Store arbitary file for $path to store."
 }
@@ -61,6 +64,25 @@ cmd_retrieve() {
     else
         check_sneaky_paths "$path"
         $GPG -d "${GPG_OPTS[@]}" "$passfile" | base64 -d || exit $?
+    fi
+}
+
+cmd_save() {
+    local path="$1"
+
+    if [[ ${path: -4} != ".b64" ]]; then
+	path="${path}.b64"
+    fi
+
+    local passfile="$PREFIX/$path.gpg"
+    local base_path="${path%.*}"
+    local outputfile="$(date +%Y%m%d-%H%M%S)_$(basename ${base_path})"
+
+    if [[ -z $path ]]; then 
+        print_usage
+    else
+        check_sneaky_paths "$path"
+        ($GPG -d "${GPG_OPTS[@]}" "$passfile" | base64 -d) > "${outputfile}" || exit $?
     fi
 }
 
@@ -120,6 +142,9 @@ case $1 in
     retrieve|show|cat)
         shift && cmd_retrieve "$@"
         ;;
+    save|fetch|get)
+        shift && cmd_save "$@"
+        ;;        
     edit|vi)
 	shift && cmd_edit "$@"
 	;;
